@@ -1,5 +1,5 @@
 {
-    "version": "V0.0.4",
+    "version": "V0.0.7",
     "window_x": 454,
     "window_y": 12,
     "window_width": 720,
@@ -8,6 +8,6 @@
     "auto_close": false,
     "auto_close_seconds": 60,
     "apple_id": "",
-    "last_ipa_dir": "",
-    "last_ipa_path": ""
+    "last_ipa_dir": "C:\\Users\\erickson\\Downloads",
+    "last_ipa_path": "C:/Users/erickson/Downloads/App.ipa"
 }

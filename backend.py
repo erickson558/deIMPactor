@@ -5,12 +5,13 @@ Handles: configuration persistence, structured logging, and iOS
 device operations (device discovery + IPA installation via USB).
 
 Author : Synyster Rick
-Version: V0.0.4
+Version: V0.0.7
 License: Apache License 2.0 — Copyright 2026, All rights reserved.
 """
 from __future__ import annotations
 
 import asyncio
+import importlib
 import importlib.util
 import inspect
 import json
@@ -18,12 +19,18 @@ import logging
 import subprocess
 import sys
 import threading
+import warnings
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+warnings.filterwarnings(
+    "ignore",
+    message=r"urllib3 .* doesn't match a supported version!",
+)
+
 # ── Application metadata ──────────────────────────────────────────────────────
-VERSION_NUMBER = "0.0.4"
+VERSION_NUMBER = "0.0.7"
 VERSION        = f"V{VERSION_NUMBER}"
 APP_NAME       = "deIMPactor"
 AUTHOR         = "Synyster Rick"
@@ -36,6 +43,7 @@ CREATE_NO_WINDOW: int = 0x08000000 if sys.platform == "win32" else 0
 _CONFIG_FILE = "config.json"
 _LOG_FILE    = "log.txt"
 _REQUIRED_MODULES = ("pymobiledevice3",)
+_ASYNC_LOCAL = threading.local()
 
 DEFAULT_CONFIG: dict = {
     "version":            VERSION,
@@ -98,9 +106,23 @@ logger.info(
 
 def check_runtime_support() -> tuple[bool, str]:
     """Validate whether the active interpreter can talk to iOS devices."""
+    return _probe_runtime_support()
+
+
+def _probe_runtime_support() -> tuple[bool, str]:
+    """Probe importability of runtime modules required for iOS USB detection."""
     missing = [name for name in _REQUIRED_MODULES if importlib.util.find_spec(name) is None]
     if missing:
         return (False, f"Dependencias faltantes: {', '.join(missing)}")
+
+    try:
+        importlib.import_module("pymobiledevice3")
+        importlib.import_module("pymobiledevice3.usbmux")
+    except Exception as exc:
+        return (
+            False,
+            f"Dependencias dañadas o incompletas en {Path(sys.executable).name}: {exc}",
+        )
 
     return (True, "Entorno listo para detectar dispositivos iOS por USB.")
 
@@ -114,8 +136,8 @@ def ensure_runtime_dependencies(
         if on_status:
             on_status(msg)
 
-    missing = [name for name in _REQUIRED_MODULES if importlib.util.find_spec(name) is None]
-    if not missing:
+    probe_ok, probe_msg = _probe_runtime_support()
+    if probe_ok:
         return (True, "Dependencias OK")
 
     if getattr(sys, "frozen", False):
@@ -126,29 +148,18 @@ def ensure_runtime_dependencies(
         logger.error(msg)
         return (False, msg)
 
-    _status("Faltan dependencias, instalando en segundo plano...")
-    req_file = get_base_path() / "requirements.txt"
-    if req_file.is_file():
-        cmd = [
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "--disable-pip-version-check",
-            "--no-input",
-            "-r",
-            str(req_file),
-        ]
-    else:
-        cmd = [
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "--disable-pip-version-check",
-            "--no-input",
-            *missing,
-        ]
+    _status("Faltan o están dañadas dependencias, reparando en segundo plano...")
+    cmd = [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+        "--no-input",
+        "--upgrade",
+        "--force-reinstall",
+        *list(_REQUIRED_MODULES),
+    ]
 
     try:
         proc = subprocess.run(
@@ -160,7 +171,7 @@ def ensure_runtime_dependencies(
         )
         if proc.returncode != 0:
             err = (proc.stderr or proc.stdout or "Error desconocido de pip").strip()
-            msg = f"No se pudieron instalar dependencias: {err.splitlines()[-1]}"
+            msg = f"No se pudieron reparar dependencias: {err.splitlines()[-1]}"
             logger.error(msg)
             return (False, msg)
     except Exception as exc:
@@ -168,13 +179,14 @@ def ensure_runtime_dependencies(
         logger.exception(msg)
         return (False, msg)
 
-    remaining = [name for name in _REQUIRED_MODULES if importlib.util.find_spec(name) is None]
-    if remaining:
-        msg = f"Dependencias aún faltantes tras instalar: {', '.join(remaining)}"
+    importlib.invalidate_caches()
+    probe_ok, probe_msg = _probe_runtime_support()
+    if not probe_ok:
+        msg = f"Dependencias aún no operativas tras reparar: {probe_msg}"
         logger.error(msg)
         return (False, msg)
 
-    msg = "Dependencias instaladas correctamente"
+    msg = "Dependencias reparadas correctamente"
     _status(msg)
     return (True, msg)
 
@@ -219,11 +231,21 @@ def _resolve_maybe_awaitable(value: Any) -> Any:
     if not inspect.isawaitable(value):
         return value
 
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(value)
-    finally:
-        loop.close()
+    loop = _get_thread_event_loop()
+    return loop.run_until_complete(value)
+
+
+def _get_thread_event_loop() -> asyncio.AbstractEventLoop:
+    """Return a persistent event loop bound to the current worker thread."""
+    loop = getattr(_ASYNC_LOCAL, "loop", None)
+    if loop is None or loop.is_closed():
+        # Selector loop is more stable than Proactor for this USB/SSL workflow on Windows.
+        if sys.platform == "win32":
+            loop = asyncio.SelectorEventLoop()
+        else:
+            loop = asyncio.new_event_loop()
+        _ASYNC_LOCAL.loop = loop
+    return loop
 
 
 def _make_lockdown(udid: str) -> Any:
@@ -283,11 +305,11 @@ def list_devices() -> list[dict]:
                 logger.warning(f"  No se pudo obtener info de {udid[:12]}: {exc}")
             result.append(info)
 
-    except ImportError:
-        logger.error(
-            "pymobiledevice3 no está instalado.\n"
-            "Ejecuta:  pip install pymobiledevice3"
-        )
+    except ImportError as exc:
+        ok, message = _probe_runtime_support()
+        if not ok:
+            logger.error(message)
+        logger.error(f"Error de importación durante detección USB: {exc}")
     except Exception as exc:
         logger.error(f"list_devices error: {exc}")
 
@@ -333,16 +355,48 @@ def install_ipa(
             if msg:
                 _status(f"[{pct:3d}%] {msg}")
 
-        install_method = getattr(svc, "install_from_local_file", None)
-        if callable(install_method):
-            _resolve_maybe_awaitable(install_method(ipa_path, callback=_progress))
-        else:
-            fallback_install = getattr(svc, "install", None)
-            if not callable(fallback_install):
-                raise RuntimeError(
-                    "La versión instalada de pymobiledevice3 no expone un método de instalación compatible"
-                )
-            _resolve_maybe_awaitable(fallback_install(ipa_path, callback=_progress))
+        install_done = False
+        for method_name in ("install_from_local_file", "install_from_local", "install"):
+            method = getattr(svc, method_name, None)
+            if not callable(method):
+                continue
+
+            try:
+                sig = inspect.signature(method)
+                kwargs: dict[str, Any] = {}
+                if "callback" in sig.parameters:
+                    kwargs["callback"] = _progress
+                elif "handler" in sig.parameters:
+                    kwargs["handler"] = _progress
+
+                _resolve_maybe_awaitable(method(ipa_path, **kwargs))
+                install_done = True
+                logger.debug(f"Instalación ejecutada mediante {method_name}()")
+                break
+            except TypeError:
+                _resolve_maybe_awaitable(method(ipa_path))
+                install_done = True
+                logger.debug(f"Instalación ejecutada mediante {method_name}() sin callback")
+                break
+
+        if not install_done:
+            install_from_bytes = getattr(svc, "install_from_bytes", None)
+            if callable(install_from_bytes):
+                ipa_bytes = Path(ipa_path).read_bytes()
+                sig = inspect.signature(install_from_bytes)
+                kwargs: dict[str, Any] = {}
+                if "callback" in sig.parameters:
+                    kwargs["callback"] = _progress
+                elif "handler" in sig.parameters:
+                    kwargs["handler"] = _progress
+                _resolve_maybe_awaitable(install_from_bytes(ipa_bytes, **kwargs))
+                install_done = True
+                logger.debug("Instalación ejecutada mediante install_from_bytes()")
+
+        if not install_done:
+            raise RuntimeError(
+                "La versión instalada de pymobiledevice3 no expone un método de instalación compatible"
+            )
 
         _status(f"✔  {name} instalada correctamente!")
         logger.info(f"IPA instalada: {ipa_path!r} → dispositivo {udid}")
