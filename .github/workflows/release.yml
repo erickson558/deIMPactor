@@ -54,8 +54,17 @@ jobs:
             echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build executable
+        shell: pwsh
         run: |
-          python -m PyInstaller .\deIMPactor.spec --noconfirm
+          $specPath = Join-Path $env:GITHUB_WORKSPACE 'deIMPactor.spec'
+          if (-not (Test-Path $specPath)) {
+            Write-Host "Workspace: $env:GITHUB_WORKSPACE"
+            Write-Host "Root files:"
+            Get-ChildItem -Path $env:GITHUB_WORKSPACE -Force | Select-Object -ExpandProperty Name
+            throw "Spec file not found: $specPath"
+          }
+
+          python -m PyInstaller $specPath --noconfirm
 
       - name: Create or update tag
         env:
