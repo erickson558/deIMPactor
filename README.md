@@ -4,7 +4,7 @@ deIMPactor es una aplicación de escritorio en Python para Windows orientada a i
 
 ## Versión
 
-Versión actual: `V0.0.2`
+Versión actual: `V0.0.4`
 
 ## Características
 
@@ -18,6 +18,7 @@ Versión actual: `V0.0.2`
 - Menú de aplicación con accesos rápidos estilo Windows
 - Compilación a `.exe` usando icono `.ico`
 - Sin ventana de consola al ejecutar el `.exe`
+- Auto-instalación silenciosa de dependencias faltantes al iniciar
 
 ## Estructura
 
@@ -45,7 +46,7 @@ python .\main.py
 ## Compilación
 
 ```powershell
-python -m PyInstaller --onefile --windowed --icon="ios_os_logo_icon_134676.ico" --name="deIMPactor" --distpath="." --workpath="./build" --specpath="." --noconfirm main.py
+.\build.ps1
 ```
 
 ## Versionado
@@ -54,6 +55,8 @@ Se sigue un versionado incremental por commit:
 
 - `V0.0.1`: base inicial compilable
 - `V0.0.2`: corrección del menú, mejora visual de la GUI y preparación del repositorio
+- `V0.0.3`: corrección de detección del entorno Python y empaquetado confiable de `pymobiledevice3`
+- `V0.0.4`: bootstrap de dependencias al inicio para mejorar portabilidad entre equipos
 
 Cada commit debe:
 

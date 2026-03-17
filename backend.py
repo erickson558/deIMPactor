@@ -5,15 +5,17 @@ Handles: configuration persistence, structured logging, and iOS
 device operations (device discovery + IPA installation via USB).
 
 Author : Synyster Rick
-Version: V0.0.2
+Version: V0.0.4
 License: Apache License 2.0 — Copyright 2026, All rights reserved.
 """
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import inspect
 import json
 import logging
+import subprocess
 import sys
 import threading
 from datetime import datetime
@@ -21,7 +23,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 # ── Application metadata ──────────────────────────────────────────────────────
-VERSION_NUMBER = "0.0.2"
+VERSION_NUMBER = "0.0.4"
 VERSION        = f"V{VERSION_NUMBER}"
 APP_NAME       = "deIMPactor"
 AUTHOR         = "Synyster Rick"
@@ -33,6 +35,7 @@ CREATE_NO_WINDOW: int = 0x08000000 if sys.platform == "win32" else 0
 # ── File names ────────────────────────────────────────────────────────────────
 _CONFIG_FILE = "config.json"
 _LOG_FILE    = "log.txt"
+_REQUIRED_MODULES = ("pymobiledevice3",)
 
 DEFAULT_CONFIG: dict = {
     "version":            VERSION,
@@ -88,9 +91,92 @@ def _setup_logger() -> logging.Logger:
 logger: logging.Logger = _setup_logger()
 logger.info("=" * 60)
 logger.info(
-    f"{APP_NAME} v{VERSION}  •  iniciado "
+    f"{APP_NAME} {VERSION}  •  iniciado "
     f"{datetime.now():%Y-%m-%d %H:%M:%S}"
 )
+
+
+def check_runtime_support() -> tuple[bool, str]:
+    """Validate whether the active interpreter can talk to iOS devices."""
+    missing = [name for name in _REQUIRED_MODULES if importlib.util.find_spec(name) is None]
+    if missing:
+        return (False, f"Dependencias faltantes: {', '.join(missing)}")
+
+    return (True, "Entorno listo para detectar dispositivos iOS por USB.")
+
+
+def ensure_runtime_dependencies(
+    on_status: Optional[Callable[[str], None]] = None,
+) -> tuple[bool, str]:
+    """Try to install missing runtime dependencies for the active interpreter."""
+    def _status(msg: str) -> None:
+        logger.info(msg)
+        if on_status:
+            on_status(msg)
+
+    missing = [name for name in _REQUIRED_MODULES if importlib.util.find_spec(name) is None]
+    if not missing:
+        return (True, "Dependencias OK")
+
+    if getattr(sys, "frozen", False):
+        msg = (
+            "El ejecutable no incluye dependencias requeridas. "
+            "Recompile la app con el build actual."
+        )
+        logger.error(msg)
+        return (False, msg)
+
+    _status("Faltan dependencias, instalando en segundo plano...")
+    req_file = get_base_path() / "requirements.txt"
+    if req_file.is_file():
+        cmd = [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            "--no-input",
+            "-r",
+            str(req_file),
+        ]
+    else:
+        cmd = [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            "--no-input",
+            *missing,
+        ]
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            text=True,
+            capture_output=True,
+            check=False,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        if proc.returncode != 0:
+            err = (proc.stderr or proc.stdout or "Error desconocido de pip").strip()
+            msg = f"No se pudieron instalar dependencias: {err.splitlines()[-1]}"
+            logger.error(msg)
+            return (False, msg)
+    except Exception as exc:
+        msg = f"Fallo instalando dependencias: {exc}"
+        logger.exception(msg)
+        return (False, msg)
+
+    remaining = [name for name in _REQUIRED_MODULES if importlib.util.find_spec(name) is None]
+    if remaining:
+        msg = f"Dependencias aún faltantes tras instalar: {', '.join(remaining)}"
+        logger.error(msg)
+        return (False, msg)
+
+    msg = "Dependencias instaladas correctamente"
+    _status(msg)
+    return (True, msg)
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────

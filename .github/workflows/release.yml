@@ -54,7 +54,7 @@ jobs:
 
       - name: Build executable
         run: |
-          python -m PyInstaller --onefile --windowed --icon="ios_os_logo_icon_134676.ico" --name="deIMPactor" --distpath="dist" --workpath="build" --specpath="." --noconfirm main.py
+          python -m PyInstaller .\deIMPactor.spec --noconfirm
 
       - name: Create or update tag
         env:

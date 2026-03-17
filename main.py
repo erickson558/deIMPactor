@@ -5,7 +5,7 @@ All business logic lives in backend.py.  This module is responsible
 ONLY for the user interface: layout, events, and UI state management.
 
 Author : Synyster Rick
-Version: V0.0.2
+Version: V0.0.4
 License: Apache License 2.0 — Copyright 2026, All rights reserved.
 """
 from __future__ import annotations
@@ -34,6 +34,8 @@ class App(tk.Tk):
         self._save_id:   Optional[str] = None   # debounce handle for config save
         self._geo_id:    Optional[str] = None   # debounce handle for geometry save
         self._countdown: Optional[int] = None   # seconds remaining for auto-close
+        self._deps_ready: bool          = False
+        self._deps_busy:  bool          = False
 
         self._setup_window()
         self._configure_styles()
@@ -42,6 +44,7 @@ class App(tk.Tk):
         self._build_status_bar()
         self._restore_config()
         self._bind_shortcuts()
+        self._bootstrap_dependencies()
 
         self.bind("<Configure>", self._on_configure)
         self.protocol("WM_DELETE_WINDOW", self._on_exit)
@@ -500,6 +503,22 @@ class App(tk.Tk):
     def _set_status(self, msg: str) -> None:
         self.after(0, self._status_var.set, msg)
 
+    def _bootstrap_dependencies(self) -> None:
+        self._deps_busy = True
+        self._set_status("Validando dependencias del entorno...")
+
+        def _task() -> None:
+            ok, msg = backend.ensure_runtime_dependencies(self._set_status)
+
+            def _done() -> None:
+                self._deps_busy = False
+                self._deps_ready = ok
+                self._set_status(msg if not ok else "Dependencias listas. Presione F5 para detectar el iPhone.")
+
+            self.after(0, _done)
+
+        threading.Thread(target=_task, daemon=True, name="deps-bootstrap").start()
+
     def _set_progress(self, pct: int) -> None:
         self.after(0, self._progress_var.set, pct)
         self.after(0, self._progress_text_var.set, f"{pct}%")
@@ -600,6 +619,19 @@ class App(tk.Tk):
     # Refresh device list
     # ──────────────────────────────────────────────────────────────────────────
     def _on_refresh(self) -> None:
+        if self._deps_busy:
+            self._set_status("Instalando dependencias, espere unos segundos...")
+            return
+
+        ready, message = backend.check_runtime_support()
+        if not ready:
+            self._devices = []
+            self._device_combo["values"] = ["Dependencia faltante"]
+            self._device_combo.current(0)
+            self._set_status(message)
+            self._btn_refresh.config(state="normal")
+            return
+
         self._set_status("Buscando dispositivos iOS…")
         self._btn_refresh.config(state="disabled")
 
