@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.spec
+build/
+dist/
+.venv/
+venv/
+*.log
+deIMPactor.exe
+
+# Local runtime artifacts
+log.txt
+
+# OS / editor
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,9 @@
+# deIMPactor — iOS IPA Sideloader
+# https://github.com/SynysterRick/deIMPactor
+
+# ── Runtime dependency ────────────────────────────────────────────────────────
+# Requires Apple Mobile Device Support (iTunes) drivers on Windows
+pymobiledevice3>=3.0.0
+
+# ── Build / development (not needed at runtime) ───────────────────────────────
+pyinstaller>=6.0.0
