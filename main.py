@@ -5,7 +5,7 @@ All business logic lives in backend.py.  This module is responsible
 ONLY for the user interface: layout, events, and UI state management.
 
 Author : Synyster Rick
-Version: V0.0.4
+Version: V0.0.8
 License: Apache License 2.0 — Copyright 2026, All rights reserved.
 """
 from __future__ import annotations
@@ -513,7 +513,7 @@ class App(tk.Tk):
             def _done() -> None:
                 self._deps_busy = False
                 self._deps_ready = ok
-                self._set_status(msg if not ok else "Dependencias listas. Presione F5 para detectar el iPhone.")
+                self._set_status(msg if not ok else "Dependencias listas y verificadas. Presione F5 para detectar el iPhone.")
 
             self.after(0, _done)
 
