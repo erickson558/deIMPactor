@@ -174,6 +174,7 @@ class App(tk.Tk):
         self._deps_ready: bool = False
         self._deps_busy: bool = False
         self._shutting_down: bool = False
+        self._mousewheel_bound: bool = False
 
         # Language code is kept in config and reused by both menu and combobox.
         self._lang: str = self._normalize_lang(self._cfg.get("language", "es"))
@@ -327,7 +328,23 @@ class App(tk.Tk):
 
     # Main UI content
     def _build_ui(self) -> None:
-        root = ttk.Frame(self, padding=14, style="Root.TFrame")
+        # Scrollable container: keeps all controls reachable on small windows/DPI scaling.
+        self._content_canvas = tk.Canvas(self, bg="#eef3f8", highlightthickness=0, bd=0)
+        self._content_canvas.pack(fill="both", expand=True)
+
+        self._content_scroll = ttk.Scrollbar(self, orient="vertical", command=self._content_canvas.yview)
+        self._content_scroll.pack(side="right", fill="y")
+        self._content_canvas.configure(yscrollcommand=self._content_scroll.set)
+
+        self._root_window = ttk.Frame(self._content_canvas, style="Root.TFrame")
+        self._canvas_window_id = self._content_canvas.create_window((0, 0), window=self._root_window, anchor="nw")
+
+        self._root_window.bind("<Configure>", self._on_content_configure)
+        self._content_canvas.bind("<Configure>", self._on_canvas_configure)
+        self._content_canvas.bind("<Enter>", self._bind_mousewheel)
+        self._content_canvas.bind("<Leave>", self._unbind_mousewheel)
+
+        root = ttk.Frame(self._root_window, padding=14, style="Root.TFrame")
         root.pack(fill="both", expand=True)
 
         hero = ttk.Frame(root, padding=(18, 16), style="Hero.TFrame")
@@ -519,6 +536,33 @@ class App(tk.Tk):
         ttk.Label(bar, textvariable=self._countdown_var, anchor="e", padding=(0, 2, 8, 2), style="Status.TLabel").pack(
             side="right"
         )
+
+    # Scrollable layout helpers
+    def _on_content_configure(self, _event: tk.Event) -> None:
+        # Update scroll region after any content size change.
+        self._content_canvas.configure(scrollregion=self._content_canvas.bbox("all"))
+
+    def _on_canvas_configure(self, event: tk.Event) -> None:
+        # Keep inner frame width synchronized with canvas viewport width.
+        self._content_canvas.itemconfigure(self._canvas_window_id, width=event.width)
+
+    def _bind_mousewheel(self, _event: tk.Event) -> None:
+        if self._mousewheel_bound:
+            return
+        self._mousewheel_bound = True
+        self.bind_all("<MouseWheel>", self._on_mousewheel)
+
+    def _unbind_mousewheel(self, _event: tk.Event) -> None:
+        if not self._mousewheel_bound:
+            return
+        self._mousewheel_bound = False
+        self.unbind_all("<MouseWheel>")
+
+    def _on_mousewheel(self, event: tk.Event) -> None:
+        if self._shutting_down:
+            return
+        # Windows wheel delta is typically +/-120 per notch.
+        self._content_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     # Restore config and widget state
     def _restore_config(self) -> None:
@@ -849,6 +893,8 @@ class App(tk.Tk):
         if self._shutting_down:
             return
         self._shutting_down = True
+
+        self._unbind_mousewheel(None)
 
         self._cancel_after(self._save_id)
         self._cancel_after(self._geo_id)
