@@ -1,13 +1,14 @@
 {
-    "version": "V0.0.8",
-    "window_x": 381,
-    "window_y": 19,
+    "version": "V0.1.0",
+    "window_x": 2099,
+    "window_y": 14,
     "window_width": 720,
     "window_height": 748,
     "auto_start": false,
     "auto_close": false,
     "auto_close_seconds": 60,
-    "apple_id": "",
-    "last_ipa_dir": "C:\\Users\\erickson\\Downloads",
-    "last_ipa_path": "C:/Users/erickson/Downloads/App.ipa"
+    "apple_id": "erickson558@hotmail.com",
+    "last_ipa_dir": "D:\\OneDrive\\Regional\\dumpftpaxess",
+    "last_ipa_path": "",
+    "language": "es"
 }

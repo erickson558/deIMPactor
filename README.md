@@ -4,7 +4,7 @@ deIMPactor es una aplicación de escritorio en Python para Windows orientada a i
 
 ## Versión
 
-Versión actual: `V0.0.8`
+Versión actual: `V0.1.0`
 
 ## Características
 
@@ -19,6 +19,9 @@ Versión actual: `V0.0.8`
 - Compilación a `.exe` usando icono `.ico`
 - Sin ventana de consola al ejecutar el `.exe`
 - Auto-instalación silenciosa de dependencias faltantes al iniciar
+- Soporte multi idioma (Español/Inglés) desde la interfaz
+- Botón de donaciones "Cómprame una cerveza" con enlace a PayPal
+- Cierre más robusto de la GUI para evitar errores de callbacks en Tkinter
 
 ## Estructura
 
@@ -61,6 +64,7 @@ Se sigue un versionado incremental por commit:
 - `V0.0.6`: compatibilidad de instalación IPA para APIs `install_from_local_file`, `install_from_local`, `install` e `install_from_bytes`
 - `V0.0.7`: corrección de event loop persistente por hilo para evitar `RuntimeError: Event loop is closed` durante instalación IPA
 - `V0.0.8`: sincronización final de frontend y estado de bootstrap con la corrección de instalación
+- `V0.1.0`: soporte multi idioma, botón de donación y hardening del cierre de GUI para mayor estabilidad
 
 Cada commit debe:
 

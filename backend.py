@@ -5,7 +5,7 @@ Handles: configuration persistence, structured logging, and iOS
 device operations (device discovery + IPA installation via USB).
 
 Author : Synyster Rick
-Version: V0.0.8
+Version: V0.1.0
 License: Apache License 2.0 — Copyright 2026, All rights reserved.
 """
 from __future__ import annotations
@@ -30,7 +30,7 @@ warnings.filterwarnings(
 )
 
 # ── Application metadata ──────────────────────────────────────────────────────
-VERSION_NUMBER = "0.0.8"
+VERSION_NUMBER = "0.1.0"
 VERSION        = f"V{VERSION_NUMBER}"
 APP_NAME       = "deIMPactor"
 AUTHOR         = "Synyster Rick"
@@ -55,6 +55,7 @@ DEFAULT_CONFIG: dict = {
     "auto_close":         False,
     "auto_close_seconds": 60,
     "apple_id":           "",
+    "language":           "es",
     "last_ipa_dir":       "",
     "last_ipa_path":      "",
 }
